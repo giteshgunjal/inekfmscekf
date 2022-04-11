@@ -46,7 +46,7 @@ Isometry3d CAMState::T_cam0_cam1 = Isometry3d::Identity();
 
 // Static member variables in Feature class.
 FeatureIDType Feature::next_id = 0;
-double Feature::observation_noise = 0.0; // noise zeroed to debugg
+double Feature::observation_noise = 0.01; // noise zeroed to debugg
 Feature::OptimizationConfig Feature::optimization_config;
 
 map<int, double> MsckfVio::chi_squared_test_table;
@@ -79,7 +79,7 @@ bool MsckfVio::loadParameters() {
   nh.param<double>("noise/acc", IMUState::acc_noise, 0.01);
   nh.param<double>("noise/gyro_bias", IMUState::gyro_bias_noise, 0.001);
   nh.param<double>("noise/acc_bias", IMUState::acc_bias_noise, 0.01);
-  nh.param<double>("noise/feature", Feature::observation_noise, 0.0); // noise zeroed to debugg
+  nh.param<double>("noise/feature", Feature::observation_noise, 0.01); // noise zeroed to debugg
 
   // Use variance instead of standard deviation.
   IMUState::gyro_noise *= IMUState::gyro_noise;
@@ -931,15 +931,12 @@ void MsckfVio::measurementJacobian(
   H_x = dz_dpc0*dpc0_dtwc0 + dz_dpc1*dpc1_dtwc0;
   H_f = dz_dpc0*dpc0_dpg + dz_dpc1*dpc1_dpg;
 
-  // // Modifty the measurement Jacobian to ensure
+  //  // Modifty the measurement Jacobian to ensure
   // // observability constrain.
   // Matrix<double, 4, 6> A = H_x;
   // Matrix<double, 6, 1> u = Matrix<double, 6, 1>::Zero();
-  // // u.block<3, 1>(0, 0) = quaternionToRotation(
-  // //     cam_state.orientation_null) * IMUState::gravity;
-  // // cam orient cahnegd to just to keep similar
   // u.block<3, 1>(0, 0) = quaternionToRotation(
-  //     cam_state.orientation_null).transpose() * IMUState::gravity;
+  //     cam_state.orientation_null) * IMUState::gravity;
   // u.block<3, 1>(3, 0) = skewSymmetric(
   //     p_w-cam_state.position_null) * IMUState::gravity;
   // H_x = A - A*u*(u.transpose()*u).inverse()*u.transpose();
@@ -1059,9 +1056,8 @@ void MsckfVio::measurementUpdate(
   MatrixXd K_transpose = S.ldlt().solve(H_thin*P);
   MatrixXd K = K_transpose.transpose();
 
-ROS_INFO_STREAM("State_pred"<<
-      K*Feature::observation_noise*MatrixXd::Identity(
-        H_thin.rows(), H_thin.rows())*K.transpose());
+// ROS_INFO_STREAM("State_pred"<<
+//         H_thin.rows());
   // Compute the error of the state.
   VectorXd delta_x = K * r_thin;
 
@@ -1069,9 +1065,9 @@ ROS_INFO_STREAM("State_pred"<<
   MatrixXd I_KH = MatrixXd::Identity(K.rows(), H_thin.cols()) - K*H_thin;
   //state_server.state_cov = I_KH*state_server.state_cov*I_KH.transpose() +
   //  K*K.transpose()*Feature::observation_noise;
-  state_server.state_cov = I_KH*state_server.state_cov*I_KH.transpose() + K*Feature::observation_noise*MatrixXd::Identity(
-        H_thin.rows(), H_thin.rows())*K.transpose() ;
-  // state_server.state_cov = I_KH*state_server.state_cov;
+  // state_server.state_cov = I_KH*state_server.state_cov*I_KH.transpose() + K*Feature::observation_noise*MatrixXd::Identity(
+  //       H_thin.rows(), H_thin.rows())*K.transpose() ;
+  state_server.state_cov = I_KH*state_server.state_cov;
 
   // Fix the covariance to be symmetric
   MatrixXd state_cov_fixed = (state_server.state_cov + 
@@ -1154,8 +1150,8 @@ ROS_INFO_STREAM("State_pred"<<
   Matrix<double, 5, 5> X_ = Matrix<double, 5, 5>::Zero();
   X_ = Error_imu.exp()*X_pred;\
 
-  ROS_INFO_STREAM("State_"<<
-      X_);
+  // ROS_INFO_STREAM("State_"<<
+  //     X_);
 
   // update stateserver
   state_server.imu_state.orientation = rotationToQuaternion(X_.block<3, 3>(0,0).transpose());
