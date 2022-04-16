@@ -297,11 +297,25 @@ void MsckfVio::initializeGravityAndBias() {
   Vector3d gravity_imu =
     sum_linear_acc / imu_msg_buffer.size();
 
+  ROS_INFO_STREAM("world gravity"<<
+      IMUState::gravity);
+
+  ROS_INFO_STREAM("imu gravity"<<
+      gravity_imu);
+  ROS_INFO_STREAM("imu gravitynorm"<<
+      gravity_imu.norm());
+  ROS_INFO_STREAM("orient"<<
+      state_server.imu_state.orientation);
+
+    
+
   // Initialize the initial orientation, so that the estimation
   // is consistent with the inertial frame.
   double gravity_norm = gravity_imu.norm();
-  IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
+  Vector3d gravity_world = Vector3d(0.0, 0.0, -gravity_norm);
 
+
+  IMUState::gravity = gravity_world;
   // Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
   //   gravity_imu, -IMUState::gravity);
   // state_server.imu_state.orientation =
@@ -309,9 +323,23 @@ void MsckfVio::initializeGravityAndBias() {
 
 // in world
      Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
-    gravity_imu, -IMUState::gravity);
+    gravity_imu, -gravity_world);
   state_server.imu_state.orientation = 
     rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
+
+  Vector3d gravity_imu_actual = quaternionToRotation(state_server.imu_state.orientation)* IMUState::gravity;
+
+  ROS_INFO_STREAM("imu gravityactual"<<
+      gravity_imu_actual);
+  
+  // state_server.imu_state.acc_bias = -(gravity_imu + gravity_imu_actual);
+
+  ROS_INFO_STREAM("bias ini"<<
+      state_server.imu_state.acc_bias);
+
+
+
+
 
   return;
 }
@@ -596,6 +624,10 @@ void MsckfVio::processModel(const double& time,
   Vector3d acc = m_acc - imu_state.acc_bias;
   double dtime = time - imu_state.time;
 
+// ROS_INFO_STREAM("measured acc"<<
+//       m_acc);
+// ROS_INFO_STREAM("accbias"<<
+//       imu_state.acc_bias);
   // Compute discrete transition and noise covariance matrix
   Matrix<double, 21, 21> F_I = Matrix<double, 21, 21>::Zero();
   Matrix<double, 21, 12> G_I = Matrix<double, 21, 12>::Zero();
@@ -793,10 +825,10 @@ void MsckfVio::stateAugmentation(const double& time) {
 
   Matrix<double, 6, 21> J = Matrix<double, 6, 21>::Zero();
   J.block<3, 3>(0, 0) = Matrix3d::Identity();
-  J.block<3, 3>(0, 12) = R_w_i.transpose();
+  J.block<3, 3>(0, 15) = R_w_i.transpose();
   J.block<3, 3>(3, 6) = Matrix3d::Identity();
-  J.block<3, 3>(3, 12) = skewSymmetric(state_server.imu_state.position)*R_w_i.transpose();
-  J.block<3, 3>(3, 15) = R_w_i.transpose();
+  J.block<3, 3>(3, 15) = skewSymmetric(state_server.imu_state.position)*R_w_i.transpose();
+  J.block<3, 3>(3,  18) = R_w_i.transpose();
 
 
 
@@ -1148,7 +1180,7 @@ void MsckfVio::measurementUpdate(
   Error_imu.block<3, 1>(0,4) = delta_x_imu.segment(6,3);
 
   Matrix<double, 5, 5> X_ = Matrix<double, 5, 5>::Zero();
-  X_ = Error_imu.exp()*X_pred;\
+  X_ = Error_imu.exp()*X_pred;
 
   // ROS_INFO_STREAM("State_"<<
   //     X_);
@@ -1175,6 +1207,7 @@ void MsckfVio::measurementUpdate(
 
   Matrix<double, 4, 4> Bg_ = Matrix<double, 4, 4>::Zero();
   Bg_ = Errg_bias.exp()*Bg_pred;
+  // Bg_ = Bg_pred*Errg_bias.exp();
 
 // ROS_INFO_STREAM("bias_"<<
 //       Bg_);
@@ -1188,15 +1221,23 @@ void MsckfVio::measurementUpdate(
   Ba_pred.block<3, 1>(0,3) = state_server.imu_state.acc_bias;
   Ba_pred(3,3)= 1;
 
+
+ROS_INFO_STREAM("bias_a_pre"<<
+      state_server.imu_state.acc_bias);
+
   Matrix<double, 4, 4> Erra_bias = Matrix<double, 4, 4>::Zero();
   // Erra_bias.block<3, 3>(0,0) = Matrix3d::Identity();
   Erra_bias.block<3, 1>(0,3) = delta_x_bias.segment(3,3);
 
   Matrix<double, 4, 4> Ba_ = Matrix<double, 4, 4>::Zero();
   Ba_ = Erra_bias.exp()*Ba_pred;
+  // Ba_ = Ba_pred*Erra_bias.exp();
 
   // update stateserver
   state_server.imu_state.acc_bias = Ba_.block<3, 1>(0,3);
+
+  ROS_INFO_STREAM("bias_a_pred"<<
+      state_server.imu_state.acc_bias);
 
 //  extrensic
   const VectorXd& delta_x_ext = delta_x.segment(15,6);
