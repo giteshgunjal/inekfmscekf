@@ -37,7 +37,7 @@ StateIDType IMUState::next_id = 0;
 double IMUState::gyro_noise = 0.001;
 double IMUState::acc_noise = 0.01;
 double IMUState::gyro_bias_noise = 0.001;
-double IMUState::acc_bias_noise = 0.01;
+double IMUState::acc_bias_noise = 0.005;
 Vector3d IMUState::gravity = Vector3d(0, 0, -GRAVITY_ACCELERATION);
 Isometry3d IMUState::T_imu_body = Isometry3d::Identity();
 
@@ -78,7 +78,7 @@ bool MsckfVio::loadParameters() {
   nh.param<double>("noise/gyro", IMUState::gyro_noise, 0.001);
   nh.param<double>("noise/acc", IMUState::acc_noise, 0.01);
   nh.param<double>("noise/gyro_bias", IMUState::gyro_bias_noise, 0.001);
-  nh.param<double>("noise/acc_bias", IMUState::acc_bias_noise, 0.01);
+  nh.param<double>("noise/acc_bias", IMUState::acc_bias_noise, 0.005);
   nh.param<double>("noise/feature", Feature::observation_noise, 0.01); // noise zeroed to debugg
 
   // Use variance instead of standard deviation.
@@ -109,7 +109,7 @@ bool MsckfVio::loadParameters() {
   nh.param<double>("initial_covariance/gyro_bias",
       gyro_bias_cov, 1e-4);
   nh.param<double>("initial_covariance/acc_bias",
-      acc_bias_cov, 1e-2);
+      acc_bias_cov, 0.01);
 
   double extrinsic_rotation_cov, extrinsic_translation_cov;
   nh.param<double>("initial_covariance/extrinsic_rotation_cov",
@@ -304,18 +304,47 @@ void MsckfVio::initializeGravityAndBias() {
       gravity_imu);
   ROS_INFO_STREAM("imu gravitynorm"<<
       gravity_imu.norm());
-  ROS_INFO_STREAM("orient"<<
-      state_server.imu_state.orientation);
+  
 
     
 
+//   // Initialize the initial orientation, so that the estimation
+//   // is consistent with the inertial frame.
+//   double gravity_norm = gravity_imu.norm();
+//   Vector3d gravity_world = Vector3d(0.0, 0.0, -gravity_norm);
+
+
+// // in world
+//      Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
+//     gravity_imu, -gravity_world);
+//   state_server.imu_state.orientation = 
+//     rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
+
+//   Vector3d gravity_imu_actual = quaternionToRotation(state_server.imu_state.orientation)* IMUState::gravity;
+
+//   ROS_INFO_STREAM("imu gravityactual"<<
+//       gravity_imu_actual);
+
+//   IMUState::gravity = gravity_world;
+  
+//   // state_server.imu_state.acc_bias = -(gravity_imu + gravity_imu_actual);
+
+//   ROS_INFO_STREAM("bias ini"<<
+//       state_server.imu_state.acc_bias);
+
+
+
+
   // Initialize the initial orientation, so that the estimation
   // is consistent with the inertial frame.
+
+  Vector3d avgacc = gravity_imu;
   double gravity_norm = gravity_imu.norm();
-  Vector3d gravity_world = Vector3d(0.0, 0.0, -gravity_norm);
+  Vector3d gravity_world = IMUState::gravity ;
 
 
-  IMUState::gravity = gravity_world;
+
+  // IMUState::gravity = gravity_world;
   // Quaterniond q0_i_w = Quaterniond::FromTwoVectors(
   //   gravity_imu, -IMUState::gravity);
   // state_server.imu_state.orientation =
@@ -327,19 +356,27 @@ void MsckfVio::initializeGravityAndBias() {
   state_server.imu_state.orientation = 
     rotationToQuaternion(q0_i_w.toRotationMatrix().transpose());
 
+    ROS_INFO_STREAM("orient"<<
+      state_server.imu_state.orientation);
+
+    Vector3d world_acc = quaternionToRotation(state_server.imu_state.orientation).transpose()*avgacc;
+
   Vector3d gravity_imu_actual = quaternionToRotation(state_server.imu_state.orientation)* IMUState::gravity;
+
+  // state_server.imu_state.acc_bias = quaternionToRotation(state_server.imu_state.orientation)*(world_acc - IMUState::gravity
 
   ROS_INFO_STREAM("imu gravityactual"<<
       gravity_imu_actual);
+
+  ROS_INFO_STREAM("worldacc"<<
+      world_acc);
+
+  // IMUState::gravity = Vector3d(0.0, 0.0, -gravity_norm);
   
-  // state_server.imu_state.acc_bias = -(gravity_imu + gravity_imu_actual);
+  state_server.imu_state.acc_bias = (avgacc +gravity_imu_actual);
 
   ROS_INFO_STREAM("bias ini"<<
       state_server.imu_state.acc_bias);
-
-
-
-
 
   return;
 }
@@ -376,7 +413,7 @@ bool MsckfVio::resetCallback(
   nh.param<double>("initial_covariance/gyro_bias",
       gyro_bias_cov, 1e-4);
   nh.param<double>("initial_covariance/acc_bias",
-      acc_bias_cov, 1e-2);
+      acc_bias_cov, 0.01);
 
   double extrinsic_rotation_cov, extrinsic_translation_cov;
   nh.param<double>("initial_covariance/extrinsic_rotation_cov",
@@ -495,8 +532,8 @@ void MsckfVio::featureCallback(
     processing_end_time - processing_start_time;
   if (processing_time > 1.0/frame_rate) {
     ++critical_time_cntr;
-    ROS_INFO("\033[1;31mTotal processing time %f/%d...\033[0m",
-        processing_time, critical_time_cntr);
+    ROS_INFO_STREAM("PRocessing time"<<
+        processing_time << critical_time_cntr);
     //printf("IMU processing time: %f/%f\n",
     //    imu_processing_time, imu_processing_time/processing_time);
     //printf("State augmentation time: %f/%f\n",
@@ -1619,7 +1656,7 @@ void MsckfVio::onlineReset() {
   nh.param<double>("initial_covariance/gyro_bias",
       gyro_bias_cov, 1e-4);
   nh.param<double>("initial_covariance/acc_bias",
-      acc_bias_cov, 1e-2);
+      acc_bias_cov, 0.01);
 
   double extrinsic_rotation_cov, extrinsic_translation_cov;
   nh.param<double>("initial_covariance/extrinsic_rotation_cov",
