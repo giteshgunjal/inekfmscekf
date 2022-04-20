@@ -37,11 +37,11 @@ StateIDType IMUState::next_id = 0;
 double IMUState::gyro_noise = 0.001;
 double IMUState::acc_noise = 0.01;
 double IMUState::gyro_bias_noise = 0.001;
-double IMUState::acc_bias_noise = 0.005;
+double IMUState::acc_bias_noise = 0.01;
 Vector3d IMUState::gravity = Vector3d(0, 0, -GRAVITY_ACCELERATION);
 Isometry3d IMUState::T_imu_body = Isometry3d::Identity();
 
-// Static member variables in CAMState class.
+// Static member variables in CAMState class
 Isometry3d CAMState::T_cam0_cam1 = Isometry3d::Identity();
 
 // Static member variables in Feature class.
@@ -78,7 +78,7 @@ bool MsckfVio::loadParameters() {
   nh.param<double>("noise/gyro", IMUState::gyro_noise, 0.001);
   nh.param<double>("noise/acc", IMUState::acc_noise, 0.01);
   nh.param<double>("noise/gyro_bias", IMUState::gyro_bias_noise, 0.001);
-  nh.param<double>("noise/acc_bias", IMUState::acc_bias_noise, 0.005);
+  nh.param<double>("noise/acc_bias", IMUState::acc_bias_noise, 0.01);
   nh.param<double>("noise/feature", Feature::observation_noise, 0.01); // noise zeroed to debugg
 
   // Use variance instead of standard deviation.
@@ -109,7 +109,7 @@ bool MsckfVio::loadParameters() {
   nh.param<double>("initial_covariance/gyro_bias",
       gyro_bias_cov, 1e-4);
   nh.param<double>("initial_covariance/acc_bias",
-      acc_bias_cov, 0.01);
+      acc_bias_cov, 1e-2);
 
   double extrinsic_rotation_cov, extrinsic_translation_cov;
   nh.param<double>("initial_covariance/extrinsic_rotation_cov",
@@ -1656,7 +1656,7 @@ void MsckfVio::onlineReset() {
   nh.param<double>("initial_covariance/gyro_bias",
       gyro_bias_cov, 1e-4);
   nh.param<double>("initial_covariance/acc_bias",
-      acc_bias_cov, 0.01);
+      acc_bias_cov, 1e-2);
 
   double extrinsic_rotation_cov, extrinsic_translation_cov;
   nh.param<double>("initial_covariance/extrinsic_rotation_cov",

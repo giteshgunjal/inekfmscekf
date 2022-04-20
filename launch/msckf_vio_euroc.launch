@@ -38,15 +38,15 @@
       <param name="noise/gyro" value="0.005"/>
       <param name="noise/acc" value="0.05"/>
       <param name="noise/gyro_bias" value="0.001"/>
-      <param name="noise/acc_bias" value="0.01"/>
-      <param name="noise/feature" value="0.035"/>
+      <param name="noise/acc_bias" value="0.005"/>
+      <param name="noise/feature" value="0.01"/>
 
       <param name="initial_state/velocity/x" value="0.0"/>
       <param name="initial_state/velocity/y" value="0.0"/>
       <param name="initial_state/velocity/z" value="0.0"/>
 
       <!-- These values should be covariance -->
-      <param name="initial_covariance/velocity" value="0.25"/>
+      <param name="initial_covariance/velocity" value="0.1"/>
       <param name="initial_covariance/gyro_bias" value="0.01"/>
       <param name="initial_covariance/acc_bias" value="0.01"/>
       <param name="initial_covariance/extrinsic_rotation_cov" value="3.0462e-4"/>
@@ -59,3 +59,4 @@
   </group>
 
 </launch>
+
